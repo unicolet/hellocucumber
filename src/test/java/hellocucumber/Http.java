@@ -13,6 +13,8 @@ import cucumber.runtime.io.MultiLoader;
 import cucumber.runtime.io.ResourceLoader;
 import cucumber.runtime.io.ResourceLoaderClassFinder;
 import cucumber.runtime.model.CucumberFeature;
+import io.micrometer.prometheus.PrometheusConfig;
+import io.micrometer.prometheus.PrometheusMeterRegistry;
 import io.vertx.core.AbstractVerticle;
 import io.vertx.core.Vertx;
 import io.vertx.core.http.HttpServer;
@@ -28,48 +30,57 @@ import java.util.Arrays;
  */
 public class Http extends AbstractVerticle {
     private static final ResourceLoader resourceLoader = new MultiLoader(Http.class.getClassLoader());
+    private final PrometheusMeterRegistry prometheusRegistry = new PrometheusMeterRegistry(PrometheusConfig.DEFAULT);
 
     @Override
-    public void start() throws Exception {
+    public void start() {
         final HttpServer server = this.vertx.createHttpServer();
 
         final Router router = Router.router(this.vertx);
 
-        router.route("/metrics").handler(routingContext -> {
-           StringBuffer result = new StringBuffer(1024);
-            final Runtime runtime = Http.cucumber(
-                new HttpFormatter(result)
+        router.route("/prometheus").handler(routingContext -> {
+            routingContext.response().end(
+                this.prometheusRegistry.scrape()
             );
-            runtime.runFeature(
-                CucumberFeature.load(
-                    resourceLoader,
-                    Arrays.asList(
-                        String.format(
-                            "src/test/resources/hellocucumber/%s.feature",
-                            routingContext.request().getParam("feature")
+        });
+        router.route("/check").handler(routingContext -> {
+            try( ThreadLocalConfig config = ThreadLocalConfig.instance() ) {
+                config.registry = new PrometheusMeterRegistry(PrometheusConfig.DEFAULT);
+                StringBuffer result = new StringBuffer(1024);
+                final Runtime runtime = Http.cucumber(
+                    new HttpFormatter(result)
+                );
+                runtime.runFeature(
+                    CucumberFeature.load(
+                        resourceLoader,
+                        Arrays.asList(
+                            String.format(
+                                "src/test/resources/hellocucumber/%s.feature",
+                                routingContext.request().getParam("feature")
+                            )
                         )
-                    )
-                ).get(0)
-            );
-            // This handler will be called for every request
-            final HttpServerResponse response = routingContext.response();
-            response.putHeader("content-type", "text/plain; charset=utf-8");
-            // Write to the response and end it
-            if (Strings.isNullOrEmpty(routingContext.request().getParam("verbose"))) {
-                response.end(
-                    String.format(
-                        "friday.success %d%n",
-                        runtime.exitStatus()
-                    )
+                    ).get(0)
                 );
-            } else {
-                response.end(
-                    String.format(
-                        "friday.success %d%n%s",
-                        runtime.exitStatus(),
-                        result.toString()
-                    )
-                );
+                // This handler will be called for every request
+                final HttpServerResponse response = routingContext.response();
+                response.putHeader("content-type", "text/plain; charset=utf-8");
+                // Write to the response and end it
+                if (Strings.isNullOrEmpty(routingContext.request().getParam("verbose"))) {
+                    response.end(
+                        String.format(
+                            "friday.success %d%n",
+                            runtime.exitStatus()
+                        )
+                    );
+                } else {
+                    response.end(
+                        String.format(
+                            "friday.success %d%n%s",
+                            runtime.exitStatus(),
+                            result.toString()
+                        )
+                    );
+                }
             }
         });
 
