@@ -30,7 +30,6 @@ import java.util.Arrays;
  */
 public class Http extends AbstractVerticle {
     private static final ResourceLoader resourceLoader = new MultiLoader(Http.class.getClassLoader());
-    private final PrometheusMeterRegistry prometheusRegistry = new PrometheusMeterRegistry(PrometheusConfig.DEFAULT);
 
     @Override
     public void start() {
@@ -39,9 +38,13 @@ public class Http extends AbstractVerticle {
         final Router router = Router.router(this.vertx);
 
         router.route("/prometheus").handler(routingContext -> {
-            routingContext.response().end(
-                this.prometheusRegistry.scrape()
-            );
+            try(final ThreadLocalConfig config = ThreadLocalConfig.instance() ) {
+                config.registry.counter("global.counter").increment();
+                // does nothing for now...
+                routingContext.response().end(
+                    config.registry.scrape()
+                );
+            }
         });
         router.route("/check").handler(routingContext -> {
             try( ThreadLocalConfig config = ThreadLocalConfig.instance() ) {
@@ -68,15 +71,17 @@ public class Http extends AbstractVerticle {
                 if (Strings.isNullOrEmpty(routingContext.request().getParam("verbose"))) {
                     response.end(
                         String.format(
-                            "friday.success %d%n",
-                            runtime.exitStatus()
+                            "friday.success %d%n%s",
+                            runtime.exitStatus(),
+                            config.registry.scrape()
                         )
                     );
                 } else {
                     response.end(
                         String.format(
-                            "friday.success %d%n%s",
+                            "friday.success %d%n%s%n%s",
                             runtime.exitStatus(),
+                            config.registry.scrape(),
                             result.toString()
                         )
                     );

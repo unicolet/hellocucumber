@@ -4,6 +4,8 @@
 package hellocucumber;
 
 import cucumber.runtime.java.picocontainer.PicoFactory;
+import io.micrometer.prometheus.PrometheusMeterRegistry;
+import java.util.Optional;
 
 /**
  * Our special Pico container factory.
@@ -12,11 +14,20 @@ import cucumber.runtime.java.picocontainer.PicoFactory;
  * @since 10.10
  */
 public class SmartPicoFactory extends PicoFactory {
+    private final Optional<PrometheusMeterRegistry> registry;
+
     public SmartPicoFactory() {
-        if(ThreadLocalConfig.instance().registry != null) {
-            System.out.println("Registry added");
-            addClass(ThreadLocalConfig.instance().registry.getClass());
+        this.registry = Optional.ofNullable(
+            ThreadLocalConfig.instance().registry
+        );
+    }
+
+    @Override
+    public <T> T getInstance(Class<T> type) {
+        final T result = super.getInstance(type);
+        if (result instanceof InjectableRegistry) {
+            ((InjectableRegistry)result).injectRegistry(this.registry);
         }
-        System.out.println("SmartPicoFactory created...");
+        return result;
     }
 }

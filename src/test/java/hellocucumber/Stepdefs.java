@@ -1,14 +1,17 @@
 package hellocucumber;
 
 import cucumber.api.java.en.Given;
-import cucumber.api.java.en.When;
 import cucumber.api.java.en.Then;
-import static org.junit.Assert.*;
+import cucumber.api.java.en.When;
+import io.micrometer.prometheus.PrometheusMeterRegistry;
+import java.util.Optional;
+import static org.junit.Assert.assertEquals;
 
-public class Stepdefs {
+public class Stepdefs implements InjectableRegistry {
     private String today;
     private String actualAnswer;
     private final DayOfWeek dow;
+    private PrometheusMeterRegistry registry;
 
     // to test picocontainer IOC
     public Stepdefs(final DayOfWeek dow) {
@@ -28,5 +31,14 @@ public class Stepdefs {
     @Then("^I should be told \"([^\"]*)\"$")
     public void i_should_be_told(String expectedAnswer) {
         assertEquals(expectedAnswer, this.actualAnswer);
+    }
+
+    @Override
+    public void injectRegistry(final Optional<PrometheusMeterRegistry> injectable) {
+        injectable.ifPresent(meterRegistry -> {
+            this.registry = meterRegistry;
+            this.registry.counter("some.counter").increment();
+            System.out.println("Registry injected");
+        });
     }
 }

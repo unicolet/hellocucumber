@@ -3,6 +3,7 @@
  */
 package hellocucumber;
 
+import io.micrometer.prometheus.PrometheusConfig;
 import io.micrometer.prometheus.PrometheusMeterRegistry;
 import java.io.Closeable;
 
@@ -16,6 +17,7 @@ public class ThreadLocalConfig implements Closeable {
     private static ThreadLocal<ThreadLocalConfig> instance = new ThreadLocal<>();
 
     private ThreadLocalConfig() {
+        this.registry = new PrometheusMeterRegistry(PrometheusConfig.DEFAULT);
     }
 
     public static ThreadLocalConfig instance() {
